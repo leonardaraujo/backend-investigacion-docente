@@ -44,10 +44,9 @@ app.get("/", (req, res) => {
 });
 
 // Usar las rutas de autenticación
-app.use('/auth', authRoutes);
+app.use("/auth", authRoutes);
 // Usar las rutas de obtención de datos
-app.use('/data', getDatarouter);
-
+app.use("/data", getDatarouter);
 
 // Ruta para obtener un usuario por ID
 app.get("/auth/getUser", authGuard, async (req, res) => {
@@ -72,19 +71,19 @@ app.get("/auth/getUser", authGuard, async (req, res) => {
 
 // Nueva ruta para crear proyectos, relaciones y entregas en conjunto
 app.post("/crear_proyectos_y_entregas", async (req, res) => {
-  console.log(req.body)
+  console.log(req.body);
   const { DATA } = req.body;
   try {
     // Verificar si hay periodos existentes
     let ultimoPeriodo = await PeriodoInvestigacion.findOne({
-      order: [['id', 'DESC']]
+      order: [["id", "DESC"]],
     });
 
     // Si no hay periodos, crear el primer periodo
     if (!ultimoPeriodo) {
       ultimoPeriodo = await PeriodoInvestigacion.create({
         id: 1,
-        nombre: 'Periodo 1',
+        nombre: "Periodo 1",
       });
     } else {
       // Si hay periodos, crear el siguiente periodo
@@ -95,66 +94,72 @@ app.post("/crear_proyectos_y_entregas", async (req, res) => {
       });
     }
 
-    const resultados = await Promise.all(DATA.map(async (item) => {
-      // Crear el proyecto
-      const proyecto = await Proyecto.create({
-        nombre: `Proyecto de ${item.name}`,
-        initime: item.fechaInicio,
-        finishtime: item.fechaEntrega,
-        proyect_state_id: 1, // Asumiendo que 1 es el estado inicial del proyecto
-        linea_investigacion_id: item.linea_id,
-        periodo_id: ultimoPeriodo.id
-      });
-
-      // Crear la relación proyecto_usuario
-      const proyectoUsuario = await ProyectoUsuario.create({
-        user_id: item.id_user,
-        proyecto_id: proyecto.id,
-        date_asigment: item.fechaInicio
-      });
-
-      // Crear las entregas de avances
-      const entregasAvances = await Promise.all(item.avances.avancesData.map(async (avance) => {
-        return await Entrega.create({
-          numero_entrega: avance.index,
-          entrega_estado_id: 1, // Asumiendo que 1 es el estado inicial de la entrega
-          fecha_entrega: avance.fechaFinish,
-          fecha_revision: null,
-          admision_entrega_fecha_init: avance.fechaInit,
-          admision_entrega_fecha_finish: avance.fechaFinish,
-          entrega_tipo_id: 1, // Asumiendo que 1 es el tipo de entrega "Avance"
-          usuario_proyecto_id: proyectoUsuario.id
+    const resultados = await Promise.all(
+      DATA.map(async (item) => {
+        // Crear el proyecto
+        const proyecto = await Proyecto.create({
+          nombre: `Proyecto de ${item.name}`,
+          initime: item.fechaInicio,
+          finishtime: item.fechaEntrega,
+          proyect_state_id: 1, // Asumiendo que 1 es el estado inicial del proyecto
+          linea_investigacion_id: item.linea_id,
+          periodo_id: ultimoPeriodo.id,
         });
-      }));
 
-      // Crear la entrega final
-      const fechaEntregaFinal = new Date(item.fechaEntrega);
-      const fechaInitFinal = new Date(fechaEntregaFinal);
-      fechaInitFinal.setDate(fechaInitFinal.getDate() - 3); // Restar 3 días a la fecha de entrega
+        // Crear la relación proyecto_usuario
+        const proyectoUsuario = await ProyectoUsuario.create({
+          user_id: item.id_user,
+          proyecto_id: proyecto.id,
+          date_asigment: item.fechaInicio,
+        });
 
-      const entregaFinal = await Entrega.create({
-        numero_entrega: item.avances.cantAvances + 1,
-        entrega_estado_id: 1, // Asumiendo que 1 es el estado inicial de la entrega
-        fecha_entrega: item.fechaEntrega,
-        fecha_revision: null,
-        admision_entrega_fecha_init: fechaInitFinal,
-        admision_entrega_fecha_finish: item.fechaEntrega,
-        entrega_tipo_id: 2, // Asumiendo que 2 es el tipo de entrega "Final"
-        usuario_proyecto_id: proyectoUsuario.id
-      });
+        // Crear las entregas de avances
+        const entregasAvances = await Promise.all(
+          item.avances.avancesData.map(async (avance) => {
+            return await Entrega.create({
+              numero_entrega: avance.index,
+              entrega_estado_id: 1, // Asumiendo que 1 es el estado inicial de la entrega
+              fecha_entrega: null,
+              fecha_revision: null,
+              admision_entrega_fecha_init: avance.fechaInit,
+              admision_entrega_fecha_finish: avance.fechaFinish,
+              entrega_tipo_id: 1, // Asumiendo que 1 es el tipo de entrega "Avance"
+              usuario_proyecto_id: proyectoUsuario.id,
+            });
+          })
+        );
 
-      return {
-        proyecto,
-        proyectoUsuario,
-        entregasAvances,
-        entregaFinal
-      };
-    }));
+        // Crear la entrega final
+        const fechaEntregaFinal = new Date(item.fechaEntrega);
+        const fechaInitFinal = new Date(fechaEntregaFinal);
+        fechaInitFinal.setDate(fechaInitFinal.getDate() - 3); // Restar 3 días a la fecha de entrega
+
+        const entregaFinal = await Entrega.create({
+          numero_entrega: item.avances.cantAvances + 1,
+          entrega_estado_id: 1, // Asumiendo que 1 es el estado inicial de la entrega
+          fecha_entrega: null,
+          fecha_revision: null,
+          admision_entrega_fecha_init: fechaInitFinal,
+          admision_entrega_fecha_finish: item.fechaEntrega,
+          entrega_tipo_id: 2, // Asumiendo que 2 es el tipo de entrega "Final"
+          usuario_proyecto_id: proyectoUsuario.id,
+        });
+
+        return {
+          proyecto,
+          proyectoUsuario,
+          entregasAvances,
+          entregaFinal,
+        };
+      })
+    );
 
     res.status(201).json(resultados);
   } catch (err) {
     console.error("Error al crear los proyectos y entregas: " + err.message);
-    res.status(500).send("Error al crear los proyectos y entregas: " + err.message);
+    res
+      .status(500)
+      .send("Error al crear los proyectos y entregas: " + err.message);
   }
 });
 

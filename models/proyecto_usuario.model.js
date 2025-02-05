@@ -46,7 +46,7 @@ const ProyectoUsuario = sequelize.define(
 User.hasMany(ProyectoUsuario, { foreignKey: "user_id" });
 ProyectoUsuario.belongsTo(User, { foreignKey: "user_id" });
 
-Proyecto.belongsTo(ProyectoUsuario, { foreignKey: "proyecto_id" });
+Proyecto.hasMany(ProyectoUsuario, { foreignKey: "proyecto_id" });
 ProyectoUsuario.belongsTo(Proyecto, { foreignKey: "proyecto_id" });
 
 export default ProyectoUsuario;

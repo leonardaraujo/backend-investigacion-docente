@@ -25,7 +25,7 @@ const Entrega = sequelize.define(
     },
     fecha_entrega: {
       type: DataTypes.DATE,
-      allowNull: false,
+      allowNull: true,
     },
     fecha_revision: {
       type: DataTypes.DATE,

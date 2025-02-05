@@ -169,41 +169,44 @@ getDatarouter.get("/entregas", async (req, res) => {
 
 // Nueva ruta para consultar todas las entregas de un periodo específic
 getDatarouter.get('/entregas/periodo/:periodo_id', async (req, res) => {
-    const { periodo_id } = req.params;
-    try {
-      const entregas = await Entrega.findAll({
-        include: [
-          {
-            model: EntregaEstado,
-            attributes: ['id', 'nombre'],
-          },
-          {
-            model: EntregaTipo,
-            attributes: ['id', 'nombre'],
-          },
-          {
-            model: ProyectoUsuario,
-            attributes: ['user_id', 'proyecto_id'],
-            include: [
-              {
-                model: User,
-                attributes: ['id', 'name', 'email'],
-              },
-              {
-                model: Proyecto,
-                attributes: ['id', 'nombre'],
-                where: { periodo_id },
-              },
-            ],
-          },
-        ],
-      });
-      res.json(entregas);
-    } catch (err) {
-      console.error('Error al obtener las entregas del periodo: ' + err.stack);
-      res.status(500).send('Error al obtener las entregas del periodo');
-    }
-  });
+  const { periodo_id } = req.params;
+  try {
+    const entregas = await Entrega.findAll({
+      include: [
+        {
+          model: EntregaEstado,
+          attributes: ['id', 'nombre'],
+        },
+        {
+          model: EntregaTipo,
+          attributes: ['id', 'nombre'],
+        },
+        {
+          model: ProyectoUsuario,
+          attributes: ['user_id', 'proyecto_id'],
+          include: [
+            {
+              model: User,
+              attributes: ['id', 'name', 'email'],
+            },
+            {
+              model: Proyecto,
+              attributes: ['id', 'nombre', 'periodo_id'], // Asegurar que periodo_id esté en los atributos
+            },
+          ],
+        },
+      ],
+      where: {
+        '$ProyectoUsuario.Proyecto.periodo_id$': periodo_id, // Filtra en la consulta principal
+      },
+    });
+
+    res.json(entregas);
+  } catch (err) {
+    console.error('Error al obtener las entregas del periodo: ' + err.stack);
+    res.status(500).send('Error al obtener las entregas del periodo');
+  }
+});
 
 // Ruta para obtener todos los periodos
 getDatarouter.get('/periodos', async (req, res) => {
