@@ -1,26 +1,43 @@
 import express from "express";
 import cors from "cors";
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 import sequelize from "./config/database.js";
 import getDatarouter from "./routes/getDataRoutes.js";
-import {
-  User,
-  Rol,
-  PeriodoInvestigacion,
-  Proyecto,
-  ProyectoUsuario,
-  Entrega,
-} from "./models/Index.js";
+import { User } from "./models/Index.js";
 import authGuard from "./middleware/authguard.js";
 import authRoutes from "./routes/authRoutes.js";
+import uploadRouter from "./routes/uploadRoutes.js";
+import downloadRouter from "./routes/downloadPdf.js";
+import {
+	Research_project,
+	User_research_project,
+	Project_delivery,
+	Research_period,
+} from "./models/Index.js";
+import sendEmailRouter from "./routes/sendEmailRoutes.js";
+import revisionRouter from "./routes/revisionRoute.js";
+import uploadFinalRouter from "./routes/uploadFinalRoutes.js";
+import userDataRouter from "./routes/userDataRoute.js";
+import finalRevisionRouter from "./routes/finalRevisionRoute.js";
+import directorRouter from "./routes/directorRoutes.js";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc.js";
+import timezone from "dayjs/plugin/timezone.js";
+import sendDeliveryReminders from "./utils/autoRemindersEmail.js";
+import cron from "node-cron";
+
+//Cron jobs
+
+cron.schedule("0 7 * * *", async () => {
+	await sendDeliveryReminders(); //Envia mensajes recordatorios para las entregas
+});
+
 dotenv.config(); // Configurar dotenv
 
 const app = express();
 const port = 3000;
-const secretKey = process.env.SECRET_WEBTOKEN; // Usar la clave secreta desde las variables de entorno
-
+dayjs.extend(utc);
+dayjs.extend(timezone);
 // Middleware para permitir solicitudes CORS desde cualquier origen
 app.use(cors());
 
@@ -29,147 +46,175 @@ app.use(express.json());
 
 // Sincronizar los modelos con la base de datos
 sequelize
-  .sync({ force: false }) // Usa force: false para evitar cambios automáticos en la estructura de la tabla
-  .then(() => {
-    console.log("Modelos sincronizados con la base de datos");
-  })
-  .catch((err) => {
-    console.error("Error al sincronizar los modelos: ", err);
-    process.exit(1); // Salir del proceso si hay un error al sincronizar los modelos
-  });
+	.sync({ force: false }) // Usa force: false para evitar cambios automáticos en la estructura de la tabla
+	.then(() => {
+		console.log("Modelos sincronizados con la base de datos");
+	})
+	.catch((err) => {
+		console.error("Error al sincronizar los modelos: ", err);
+		process.exit(1); // Salir del proceso si hay un error al sincronizar los modelos
+	});
 
 // Ruta de prueba para verificar la conexión
 app.get("/", (req, res) => {
-  res.send("¡Conexión exitosa a la base de datos!");
+	res.send("¡Conexión exitosa a la base de datos!");
+});
+
+app.get("/testRemindingEmail", async (req, res) => {
+	res.send("Enviando recordatorios de entregas...");
+	await sendDeliveryReminders();
 });
 
 // Usar las rutas de autenticación
 app.use("/auth", authRoutes);
 // Usar las rutas de obtención de datos
 app.use("/data", getDatarouter);
+app.use("/userData", userDataRouter);
+app.use("/directorData", directorRouter);
+//Usar ruta de envio de correos
+app.use("/email", sendEmailRouter);
 
+app.use("/upload", uploadRouter);
+app.use("/uploadf", uploadFinalRouter);
+app.use("/download", downloadRouter);
+app.use("/review", revisionRouter);
+app.use("/reviewf", finalRevisionRouter);
 // Ruta para obtener un usuario por ID
 app.get("/auth/getUser", authGuard, async (req, res) => {
-  try {
-    const user = await User.findByPk(req.id, {
-      include: [
-        {
-          model: Rol,
-          attributes: ["id", "nombre"],
-        },
-      ],
-    }); // Utiliza findByPk para buscar por ID e incluir el rol
-    if (!user) {
-      return res.status(404).send("Usuario no encontrado");
-    }
-    res.json(user);
-  } catch (err) {
-    console.error("Error al obtener el usuario: " + err.stack);
-    res.status(500).send("Error al obtener el usuario");
-  }
+	try {
+		const user = await User.findByPk(req.id); // Utiliza findByPk para buscar por ID e incluir el rol
+		if (!user) {
+			return res.status(404).send("Usuario no encontrado");
+		}
+		res.json(user);
+	} catch (err) {
+		console.error(`Error al obtener el usuario: ${err.stack}`);
+		res.status(500).send("Error al obtener el usuario");
+	}
 });
 
-// Nueva ruta para crear proyectos, relaciones y entregas en conjunto
 app.post("/crear_proyectos_y_entregas", async (req, res) => {
-  console.log(req.body);
-  const { DATA } = req.body;
-  try {
-    // Verificar si hay periodos existentes
-    let ultimoPeriodo = await PeriodoInvestigacion.findOne({
-      order: [["id", "DESC"]],
-    });
+	const { DATA } = req.body;
 
-    // Si no hay periodos, crear el primer periodo
-    if (!ultimoPeriodo) {
-      ultimoPeriodo = await PeriodoInvestigacion.create({
-        id: 1,
-        nombre: "Periodo 1",
-      });
-    } else {
-      // Si hay periodos, crear el siguiente periodo
-      const nuevoPeriodoId = ultimoPeriodo.id + 1;
-      ultimoPeriodo = await PeriodoInvestigacion.create({
-        id: nuevoPeriodoId,
-        nombre: `Periodo ${nuevoPeriodoId}`,
-      });
-    }
+	try {
+		// Crear o obtener el periodo de investigación
+		let researchPeriod = await Research_period.findOne({
+			order: [["period_number", "DESC"]],
+		});
 
-    const resultados = await Promise.all(
-      DATA.map(async (item) => {
-        // Crear el proyecto
-        const proyecto = await Proyecto.create({
-          nombre: `Proyecto de ${item.name}`,
-          initime: item.fechaInicio,
-          finishtime: item.fechaEntrega,
-          proyect_state_id: 1, // Asumiendo que 1 es el estado inicial del proyecto
-          linea_investigacion_id: item.linea_id,
-          periodo_id: ultimoPeriodo.id,
-        });
+		// Obtener la fecha actual como fecha de inicio del periodo
+		const currentDate = dayjs().tz("America/Bogota").startOf("day").toDate();
 
-        // Crear la relación proyecto_usuario
-        const proyectoUsuario = await ProyectoUsuario.create({
-          user_id: item.id_user,
-          proyecto_id: proyecto.id,
-          date_asigment: item.fechaInicio,
-        });
+		if (!researchPeriod) {
+			researchPeriod = await Research_period.create({
+				period_number: 1,
+				status_id: 1, // 1 es activo
+				start_date: currentDate,
+				finish_date: null, // La fecha de finalización se dejará como null
+			});
+		} else {
+			researchPeriod = await Research_period.create({
+				period_number: researchPeriod.period_number + 1,
+				status_id: 1, // 1 es activo
+				start_date: currentDate,
+				finish_date: null, // La fecha de finalización se dejará como null
+			});
+		}
 
-        // Crear las entregas de avances
-        const entregasAvances = await Promise.all(
-          item.avances.avancesData.map(async (avance) => {
-            return await Entrega.create({
-              numero_entrega: avance.index,
-              entrega_estado_id: 1, // Asumiendo que 1 es el estado inicial de la entrega
-              fecha_entrega: null,
-              fecha_revision: null,
-              admision_entrega_fecha_init: avance.fechaInit,
-              admision_entrega_fecha_finish: avance.fechaFinish,
-              entrega_tipo_id: 1, // Asumiendo que 1 es el tipo de entrega "Avance"
-              usuario_proyecto_id: proyectoUsuario.id,
-            });
-          })
-        );
+		const resultados = await Promise.all(
+			DATA.map(async (item) => {
+				// Configurar fechas de inicio y fin del proyecto con dayjs
+				const startDate = dayjs(item.fechaInicio)
+					.tz("America/Bogota")
+					.startOf("day")
+					.toDate();
+				const finishDate = dayjs(item.fechaEntrega)
+					.tz("America/Bogota")
+					.endOf("day")
+					.toDate();
 
-        // Crear la entrega final
-        const fechaEntregaFinal = new Date(item.fechaEntrega);
-        const fechaInitFinal = new Date(fechaEntregaFinal);
-        fechaInitFinal.setDate(fechaInitFinal.getDate() - 3); // Restar 3 días a la fecha de entrega
+				// Crear el proyecto de investigación
+				const researchProject = await Research_project.create({
+					name: `Proyecto de ${item.name}`,
+					line_research_id: item.linea_id,
+					start_date: startDate,
+					finish_date: finishDate,
+					research_period_id: researchPeriod.id,
+					status_project_id: 1, // 1 es activo
+				});
 
-        const entregaFinal = await Entrega.create({
-          numero_entrega: item.avances.cantAvances + 1,
-          entrega_estado_id: 1, // Asumiendo que 1 es el estado inicial de la entrega
-          fecha_entrega: null,
-          fecha_revision: null,
-          admision_entrega_fecha_init: fechaInitFinal,
-          admision_entrega_fecha_finish: item.fechaEntrega,
-          entrega_tipo_id: 2, // Asumiendo que 2 es el tipo de entrega "Final"
-          usuario_proyecto_id: proyectoUsuario.id,
-        });
+				// Crear la relación usuario-proyecto
+				const today = dayjs().tz("America/Bogota").toDate();
+				const userResearchProject = await User_research_project.create({
+					user_id: item.id_user,
+					research_project_id: researchProject.id,
+					creation_date: today,
+				});
 
-        return {
-          proyecto,
-          proyectoUsuario,
-          entregasAvances,
-          entregaFinal,
-        };
-      })
-    );
+				// Crear las entregas de avances
+				const entregasAvances = await Promise.all(
+					item.avances.map(async (avance) => {
+						const avanceStartDate = dayjs(avance.fechaInit)
+							.tz("America/Bogota")
+							.startOf("day")
+							.toDate();
+						const avanceFinishDate = dayjs(avance.fechaFinish)
+							.tz("America/Bogota")
+							.endOf("day")
+							.toDate();
 
-    res.status(201).json(resultados);
-  } catch (err) {
-    console.error("Error al crear los proyectos y entregas: " + err.message);
-    res
-      .status(500)
-      .send("Error al crear los proyectos y entregas: " + err.message);
-  }
+						return await Project_delivery.create({
+							delivery_number: avance.index,
+							delivery_status_id: 1, // 1 ES EN CURSO
+							start_date: avanceStartDate,
+							finish_date: avanceFinishDate,
+							delivery_type_id: 1, // 1 es avance
+							user_research_project_id: userResearchProject.id,
+						});
+					}),
+				);
+
+				// Crear la entrega final
+				const finalStartDate = dayjs(finishDate)
+					.subtract(1, "day")
+					.startOf("day")
+					.toDate();
+				const finalFinishDate = dayjs(finishDate).endOf("day").toDate();
+
+				const entregaFinal = await Project_delivery.create({
+					delivery_number: item.avances.length + 1,
+					delivery_status_id: 1, // 1 ES EN CURSO
+					start_date: finalStartDate,
+					finish_date: finalFinishDate,
+					delivery_type_id: 2, // 2 es el tipo de entrega "Final"
+					user_research_project_id: userResearchProject.id,
+				});
+
+				return {
+					researchProject,
+					userResearchProject,
+					entregasAvances,
+					entregaFinal,
+				};
+			}),
+		);
+
+		res.status(201).json(resultados);
+	} catch (err) {
+		console.error("Error al crear los proyectos y entregas: " + err.message);
+		res
+			.status(500)
+			.send("Error al crear los proyectos y entregas: " + err.message);
+	}
 });
 
 // Manejo de errores global
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send("Algo salió mal!");
+	console.error(err.stack);
+	res.status(500).send("Algo salió mal!");
 });
 
 // Iniciar el servidor
 app.listen(port, () => {
-  console.log(`Servidor escuchando en http://localhost:${port}`);
+	console.log(`Servidor escuchando en http://localhost:${port}`);
 });

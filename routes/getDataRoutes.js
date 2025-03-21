@@ -1,222 +1,370 @@
 import express from "express";
 import {
-  User,
-  ProyectoUsuario,
-  Proyecto,
-  PeriodoInvestigacion,
-  Rol,
-  LineaInvestigacion,
-  Entrega,
-  EntregaEstado,
-  EntregaTipo,
-  ProyectState,
+	User,
+	Research_period,
+	Research_project,
+	Project_delivery,
+	User_research_project,
+	Review,
+	Observation,
+	Doc_file_route,
 } from "../models/Index.js";
 
 const getDatarouter = express.Router();
 
 // Ruta para obtener todos los usuarios
 getDatarouter.get("/usuarios", async (req, res) => {
-  try {
-    const usuarios = await User.findAll();
-    res.json(usuarios);
-  } catch (err) {
-    console.error("Error al obtener los usuarios: " + err.stack);
-    res.status(500).send("Error al obtener los usuarios");
-  }
+	try {
+		const usuarios = await User.findAll();
+		res.json(usuarios);
+	} catch (err) {
+		console.error("Error al obtener los usuarios: " + err.stack);
+		res.status(500).send("Error al obtener los usuarios");
+	}
 });
 
-// Ruta para obtener todos los registros de proyecto_usuario
-getDatarouter.get("/proyectos_usuario", async (req, res) => {
-  try {
-    const proyectosUsuario = await ProyectoUsuario.findAll({
-      include: [
-        {
-          model: User,
-          attributes: ["id", "name", "email"],
-        },
-        {
-          model: Proyecto,
-          attributes: ["id", "nombre"],
-          include: [
-            {
-              model: PeriodoInvestigacion,
-              attributes: ["id", "nombre"],
-            },
-          ],
-        },
-      ],
-    });
-    res.json(proyectosUsuario);
-  } catch (err) {
-    console.error("Error al obtener los proyectos_usuario: " + err.stack);
-    res.status(500).send("Error al obtener los proyectos_usuario");
-  }
+// Nueva ruta para consultar la tabla research_period
+getDatarouter.get("/last_research_period_to_create", async (req, res) => {
+	try {
+		const lastPeriod = await Research_period.findOne({
+			order: [["period_number", "DESC"]],
+		});
+
+		if (lastPeriod) {
+			const newPeriodNumber = lastPeriod.period_number + 1;
+			res.json({ message: "Nuevo periodo", period_number: newPeriodNumber });
+		} else {
+			res.json({ message: "La tabla está vacía", period_number: 1 });
+		}
+	} catch (err) {
+		console.error("Error al consultar la tabla research_period: " + err.stack);
+		res.status(500).send("Error al consultar la tabla research_period");
+	}
 });
 
-// Ruta para obtener el último periodo de investigación
-getDatarouter.get("/ultimo_periodo_investigacion", async (req, res) => {
-  try {
-    const ultimoPeriodo = await PeriodoInvestigacion.findOne({
-      order: [["id", "DESC"]],
-    });
-    if (!ultimoPeriodo) {
-      return res
-        .status(404)
-        .send("No se encontró ningún periodo de investigación");
-    }
-    res.json(ultimoPeriodo);
-  } catch (err) {
-    console.error(
-      "Error al obtener el último periodo de investigación: " + err.stack
-    );
-    res.status(500).send("Error al obtener el último periodo de investigación");
-  }
+// Nueva ruta para obtener los usuarios con rol 3 (investigadores)
+getDatarouter.get("/get_investigators", async (req, res) => {
+	try {
+		const investigadores = await User.findAll({
+			where: { rol_id: 3 },
+		});
+		res.json(investigadores);
+	} catch (err) {
+		console.error("Error al obtener los investigadores: " + err.stack);
+		res.status(500).send("Error al obtener los investigadores");
+	}
 });
 
-// Ruta para obtener todos los usuarios con role_id igual a 1
-getDatarouter.get("/usuarios/role/1", async (req, res) => {
-  try {
-    const usuarios = await User.findAll({
-      where: { role_id: 1 },
-      include: [
-        {
-          model: Rol,
-          attributes: ["id", "nombre"],
-        },
-      ],
-    });
-    res.json(usuarios);
-  } catch (err) {
-    console.error("Error al obtener los usuarios con role_id 1: " + err.stack);
-    res.status(500).send("Error al obtener los usuarios con role_id 1");
-  }
+// Nueva ruta para obtener todos los periodos con status_id 1 (activo)
+getDatarouter.get("/active_periods", async (req, res) => {
+	try {
+		const activePeriods = await Research_period.findAll({
+			where: { status_id: 1 },
+		});
+		res.json(activePeriods);
+	} catch (err) {
+		console.error("Error al obtener los periodos activos: " + err.stack);
+		res.status(500).send("Error al obtener los periodos activos");
+	}
 });
 
-// Ruta para obtener todas las líneas de investigación
-getDatarouter.get("/lineas_investigacion", async (req, res) => {
-  try {
-    const lineasInvestigacion = await LineaInvestigacion.findAll();
-    res.json(lineasInvestigacion);
-  } catch (err) {
-    console.error("Error al obtener las líneas de investigación: " + err.stack);
-    res.status(500).send("Error al obtener las líneas de investigación");
-  }
+// Nueva ruta para obtener todas las entregas de acuerdo al proyecto que tenga un periodo específico
+getDatarouter.get("/deliveries_by_period/:period_id", async (req, res) => {
+	const { period_id } = req.params;
+	try {
+		const projects = await Research_project.findAll({
+			where: { research_period_id: period_id },
+			include: {
+				model: User_research_project,
+				include: [
+					{
+						model: Project_delivery, // Sin alias
+					},
+					{
+						model: User, // Incluir el usuario asociado a la entrega
+						attributes: [
+							"id",
+							"name",
+							"paternal_surname",
+							"maternal_surname",
+							"email",
+						],
+					},
+				],
+			},
+		});
+		res.json(projects);
+	} catch (err) {
+		console.error("Error al obtener las entregas por periodo: " + err.stack);
+		res.status(500).send("Error al obtener las entregas por periodo");
+	}
 });
+// Nueva ruta para obtener todas las entregas completas de tipo 2 (avances) de acuerdo al proyecto que tenga un periodo específico
+getDatarouter.get(
+	"/deliveries_only_avances_by_period_full/:period_id",
+	async (req, res) => {
+		const { period_id } = req.params;
+		try {
+			const projects = await Research_project.findAll({
+				where: { research_period_id: period_id },
+				include: {
+					model: User_research_project,
+					include: [
+						{
+							model: Project_delivery,
+							where: { delivery_type_id: 1 }, // Solo incluir entregas de tipo 2 (avances)
+							include: [
+								{
+									model: Review,
+									include: [
+										{
+											model: Observation,
+											include: [
+												{
+													model: Doc_file_route, // Incluir doc_file_route de la observación
+												},
+											],
+										},
+									],
+								},
+								{
+									model: Doc_file_route, // Incluir doc_file_route
+								},
+							],
+						},
+					],
+				},
+			});
+			res.json(projects);
+		} catch (err) {
+			console.error(
+				"Error al obtener las entregas completas de tipo 2 por periodo: " +
+					err.stack,
+			);
+			res
+				.status(500)
+				.send("Error al obtener las entregas completas de tipo 2 por periodo");
+		}
+	},
+);
 
-// Ruta para consultar todos los proyectos con sus relaciones
-getDatarouter.get('/proyectos/:periodo_id', async (req, res) => {
-    const { periodo_id } = req.params;
-    try {
-      const proyectos = await Proyecto.findAll({
-        where: { periodo_id },
-        include: [
-          {
-            model: ProyectState,
-            attributes: ['id', 'nombre'],
-          },
-          {
-            model: LineaInvestigacion,
-            attributes: ['id', 'nombre'],
-          },
-          {
-            model: PeriodoInvestigacion,
-            attributes: ['id', 'nombre'],
-          },
-        ],
-      });
-      res.json(proyectos);
-    } catch (err) {
-      console.error('Error al obtener los proyectos: ' + err.stack);
-      res.status(500).send('Error al obtener los proyectos');
-    }
-  });
+// Nueva ruta para obtener todas las entregas completas de tipo 2 (avances) de un usuario específico de acuerdo al proyecto que tenga un periodo específico
+getDatarouter.get(
+	"/deliveries_only_avances_by_user_and_period_full/:user_id/:period_number",
+	async (req, res) => {
+		const { user_id, period_number } = req.params;
+		try {
+			const period = await Research_period.findOne({
+				where: { period_number },
+			});
 
-// Ruta para consultar todas las entregas con sus relaciones
-getDatarouter.get("/entregas", async (req, res) => {
-  try {
-    const entregas = await Entrega.findAll({
-      include: [
-        {
-          model: EntregaEstado,
-          attributes: ["id", "nombre"],
-        },
-        {
-          model: EntregaTipo,
-          attributes: ["id", "nombre"],
-        },
-        {
-          model: ProyectoUsuario,
-          attributes: ["user_id", "proyecto_id"],
-          include: [
-            {
-              model: User,
-              attributes: ["id", "name", "email"],
-            },
-            {
-              model: Proyecto,
-              attributes: ["id", "nombre"],
-            },
-          ],
-        },
-      ],
-    });
-    res.json(entregas);
-  } catch (err) {
-    console.error("Error al obtener las entregas: " + err.stack);
-    res.status(500).send("Error al obtener las entregas");
-  }
-});
+			if (!period) {
+				return res.status(404).send("Periodo no encontrado");
+			}
 
-// Nueva ruta para consultar todas las entregas de un periodo específic
-getDatarouter.get('/entregas/periodo/:periodo_id', async (req, res) => {
-  const { periodo_id } = req.params;
-  try {
-    const entregas = await Entrega.findAll({
-      include: [
-        {
-          model: EntregaEstado,
-          attributes: ['id', 'nombre'],
-        },
-        {
-          model: EntregaTipo,
-          attributes: ['id', 'nombre'],
-        },
-        {
-          model: ProyectoUsuario,
-          attributes: ['user_id', 'proyecto_id'],
-          include: [
-            {
-              model: User,
-              attributes: ['id', 'name', 'email'],
-            },
-            {
-              model: Proyecto,
-              attributes: ['id', 'nombre', 'periodo_id'], // Asegurar que periodo_id esté en los atributos
-            },
-          ],
-        },
-      ],
-      where: {
-        '$ProyectoUsuario.Proyecto.periodo_id$': periodo_id, // Filtra en la consulta principal
-      },
-    });
+			const projects = await Research_project.findAll({
+				where: { research_period_id: period.id },
+				include: {
+					model: User_research_project,
+					where: { user_id: user_id },
+					include: [
+						{
+							model: Project_delivery,
+							where: { delivery_type_id: 1 },
+							include: [
+								{
+									model: Review,
+									include: [
+										{
+											model: Observation,
+											include: [
+												{
+													model: Doc_file_route, // Incluir doc_file_route de la observación
+												},
+											],
+										},
+									],
+								},
+								{
+									model: Doc_file_route, // Incluir doc_file_route
+								},
+							],
+						},
+					],
+				},
+			});
+			res.json(projects);
+		} catch (err) {
+			console.error(
+				"Error al obtener las entregas completas de tipo 2 por usuario y periodo: " +
+					err.stack,
+			);
+			res
+				.status(500)
+				.send(
+					"Error al obtener las entregas completas de tipo 2 por usuario y periodo",
+				);
+		}
+	},
+);
 
-    res.json(entregas);
-  } catch (err) {
-    console.error('Error al obtener las entregas del periodo: ' + err.stack);
-    res.status(500).send('Error al obtener las entregas del periodo');
-  }
-});
+// Nueva ruta para obtener todas las entregas completas de tipo 2 (entregas finales) de un usuario específico de acuerdo al proyecto que tenga un periodo específico
+getDatarouter.get(
+	"/deliveries_only_final_by_user_and_period_full/:user_id/:period_number",
+	async (req, res) => {
+		const { user_id, period_number } = req.params;
+		try {
+			const period = await Research_period.findOne({
+				where: { period_number },
+			});
 
-// Ruta para obtener todos los periodos
-getDatarouter.get('/periodos', async (req, res) => {
-    try {
-      const periodos = await PeriodoInvestigacion.findAll();
-      res.json(periodos);
-    } catch (err) {
-      console.error('Error al obtener los periodos: ' + err.stack);
-      res.status(500).send('Error al obtener los periodos');
-    }
-  });
+			if (!period) {
+				return res.status(404).send("Periodo no encontrado");
+			}
 
+			const projects = await Research_project.findAll({
+				where: { research_period_id: period.id },
+				include: {
+					model: User_research_project,
+					where: { user_id: user_id },
+					include: [
+						{
+							model: Project_delivery,
+							where: { delivery_type_id: 2 }, // Solo incluir entregas de tipo 2 (entregas finales)
+							include: [
+								{
+									model: Review,
+									include: [
+										{
+											model: Observation,
+											include: [
+												{
+													model: Doc_file_route, // Incluir doc_file_route de la observación
+												},
+											],
+										},
+									],
+								},
+								{
+									model: Doc_file_route, // Incluir doc_file_route
+								},
+							],
+						},
+					],
+				},
+			});
+			res.json(projects);
+		} catch (err) {
+			console.error(
+				"Error al obtener las entregas completas de tipo 2 por usuario y periodo: " +
+					err.stack,
+			);
+			res
+				.status(500)
+				.send(
+					"Error al obtener las entregas completas de tipo 2 por usuario y periodo",
+				);
+		}
+	},
+);
+
+// Nueva ruta para obtener todas las entregas completas de tipo 2 (entregas finales) de acuerdo al proyecto que tenga un periodo específico
+getDatarouter.get(
+	"/deliveries_only_final_by_period_full/:period_id",
+	async (req, res) => {
+		const { period_id } = req.params;
+		try {
+			const projects = await Research_project.findAll({
+				where: { research_period_id: period_id },
+				include: {
+					model: User_research_project,
+					include: [
+						{
+							model: Project_delivery,
+							where: { delivery_type_id: 2 }, // Solo incluir entregas de tipo 2 (entregas finales)
+							include: [
+								{
+									model: Review,
+									include: [
+										{
+											model: Observation,
+											include: [
+												{
+													model: Doc_file_route, // Incluir doc_file_route de la observación
+												},
+											],
+										},
+									],
+								},
+								{
+									model: Doc_file_route, // Incluir doc_file_route
+								},
+							],
+						},
+					],
+				},
+			});
+			res.json(projects);
+		} catch (err) {
+			console.error(
+				"Error al obtener las entregas completas de tipo 2 por periodo: " +
+					err.stack,
+			);
+			res
+				.status(500)
+				.send("Error al obtener las entregas completas de tipo 2 por periodo");
+		}
+	},
+);
 export default getDatarouter;
+
+getDatarouter.get("/deliveries_full_by_period/:period_id", async (req, res) => {
+	const { period_id } = req.params;
+	try {
+		const projects = await Research_project.findAll({
+			where: { research_period_id: period_id },
+			include: {
+				model: User_research_project,
+				include: [
+					{
+						model: Project_delivery,
+						include: [
+							{
+								model: Review,
+								include: [
+									{
+										model: Observation,
+										include: [
+											{
+												model: Doc_file_route, // Incluir doc_file_route de la observación
+											},
+										],
+									},
+								],
+							},
+							{
+								model: Doc_file_route, // Incluir doc_file_route
+							},
+						],
+					},
+					{
+						model: User, // Incluir el usuario asociado a la entrega
+						attributes: [
+							"id",
+							"name",
+							"paternal_surname",
+							"maternal_surname",
+							"email",
+						],
+					},
+				],
+			},
+		});
+		res.json(projects);
+	} catch (err) {
+		console.error(
+			"Error al obtener las entregas completas por periodo: " + err.stack,
+		);
+		res.status(500).send("Error al obtener las entregas completas por periodo");
+	}
+});
