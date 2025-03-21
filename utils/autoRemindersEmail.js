@@ -208,8 +208,8 @@ async function sendDeliveryReminders() {
                 <p>Por favor, asegúrese de realizar su entrega antes de la fecha límite para evitar inconvenientes.</p>
                 <p>Si ya ha realizado su entrega o necesita asistencia, comuníquese con nosotros lo antes posible.</p>
                 <p>Atentamente,<br>
-                Oficina del Instituto Especializado de Investigación<br>
-                investigaciones@uncp.edu.pe</p>
+                Oficina del Instituto de Investigación<br>
+                investigaciones@universidadonlinegpt.edu</p>
               </body>
             </html>
           `;
@@ -220,7 +220,7 @@ async function sendDeliveryReminders() {
           sendSmtpEmail.to = [{ email: user.email }];
           sendSmtpEmail.htmlContent = emailContent;
           sendSmtpEmail.sender = {
-            name: "Sistema de Recordatorios UNCP",
+            name: "Servicio de notificaciones Universidad Online GPT",
             email: "leonardoaraujo.oct@gmail.com",
           };
 

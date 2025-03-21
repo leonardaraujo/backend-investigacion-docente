@@ -102,8 +102,8 @@ async function sendEmail(period_id) {
             <p>Si tiene alguna consulta o requiere aclaraciones, no dude en ponerse en contacto.</p>
             <p>Quedamos atentos a su confirmación.</p>
             <p>Atentamente,<br>
-            Oficina del Instituto Especializado de Investigación<br>
-            investigaciones@uncp.edu.pe<br>
+            Oficina del Instituto de Investigación<br>
+            investigaciones@universidadonlinegpt.edu<br>
     
           </body>
         </html>
@@ -114,7 +114,7 @@ async function sendEmail(period_id) {
       sendSmtpEmail.to = [{ email: user.email }];
       sendSmtpEmail.htmlContent = emailContent;
       sendSmtpEmail.sender = {
-        name: "Servicio de notificaciones UNCP",
+        name: "Servicio de notificaciones Universidad Online GPT",
         email: "leonardoaraujo.oct@gmail.com",
       };
       sendSmtpEmail.attachment = [

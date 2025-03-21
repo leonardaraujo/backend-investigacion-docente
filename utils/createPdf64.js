@@ -19,7 +19,7 @@ const imageToBase64 = (filePath) => {
 };
 
 // Ruta de la imagen del logo
-const logoPath = path.resolve(__dirname, "uncp_logo.png");
+const logoPath = path.resolve(__dirname, "universidad_gpt_2_black.png");
 const logoBase64 = imageToBase64(logoPath);
 
 // Función para obtener el nombre del tipo de entrega

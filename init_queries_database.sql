@@ -1,4 +1,3 @@
-
 --@block
 DROP DATABASE IF EXISTS investigacion_docente;
 --@block
@@ -17,16 +16,16 @@ INSERT INTO users (
 VALUES (
         'Leonardo',
         'Director',
-        'UNCP',
-        'director@uncp.edu.pe',
+        'Universidad',
+        'director@universidad.edu.pe',
         '$2a$10$Joh1uhOcifzvb.fsd610SutNuJ7OIfIJn/jeVaIyK4UCg.9Oxlf7i',
         1
     ),
     (
         'Leonardo',
         'Revisor',
-        'UNCP',
-        'revisor@uncp.edu.pe',
+        'Universidad',
+        'revisor@universidad.edu.pe',
         '$2a$10$Joh1uhOcifzvb.fsd610SutNuJ7OIfIJn/jeVaIyK4UCg.9Oxlf7i',
         2
     ),
@@ -54,9 +53,6 @@ VALUES (
         '$2a$10$Joh1uhOcifzvb.fsd610SutNuJ7OIfIJn/jeVaIyK4UCg.9Oxlf7i',
         3
     );
-
-
-
 --@block
 INSERT INTO reviews (
         user_id,
@@ -107,7 +103,6 @@ SET review_id = (
         LIMIT 1
     )
 WHERE id = 1;
-
 --@block
 UPDATE research_periods
 SET doc_file_route_id = NULL
