@@ -11,6 +11,8 @@ import {
 } from "../models/Index.js";
 import { generatePDF } from "./createPdf64.js"; // Importar la función para generar el PDF
 
+import getEmailConfig from "./emailConfig.js";
+
 const apiInstance = new brevo.TransactionalEmailsApi();
 apiInstance.setApiKey(
   brevo.TransactionalEmailsApiApiKeys.apiKey,
@@ -24,6 +26,9 @@ export const DELIVERY_TYPES = [
 
 async function sendEmail(period_id) {
   try {
+
+        // Obtener la configuración de correo según la universidad activa
+        const emailConfig = getEmailConfig();
     console.log(`Periodo ID recibido: ${period_id}`);
     
     // Consultar todos los proyectos relacionados al periodo
@@ -91,44 +96,43 @@ async function sendEmail(period_id) {
 
     console.log(`Usuarios encontrados: ${users.length}`);
 
-    // Enviar correos personalizados a cada usuario
-    for (const user of users) {
-      const emailContent = `
-        <html>
-          <body>
-            <p>Estimado/a ${user.name},</p>
-            <p>Espero que este mensaje le encuentre bien.</p>
-            <p>Adjunto encontrará el cronograma de entregas correspondiente al periodo ${period_id}, con las fechas y requisitos establecidos para cada fase del proceso. Le solicitamos revisar el documento y asegurarse de cumplir con los plazos indicados para garantizar una gestión eficiente.</p>
-            <p>Si tiene alguna consulta o requiere aclaraciones, no dude en ponerse en contacto.</p>
-            <p>Quedamos atentos a su confirmación.</p>
-            <p>Atentamente,<br>
-            Oficina del Instituto Especializado de Investigación<br>
-            investigaciones@uncp.edu.pe<br>
-    
-          </body>
-        </html>
-      `;
+   // Enviar correos personalizados a cada usuario
+   for (const user of users) {
+    const emailContent = `
+      <html>
+        <body>
+          <p>Estimado/a ${user.name},</p>
+          <p>Espero que este mensaje le encuentre bien.</p>
+          <p>Adjunto encontrará el cronograma de entregas correspondiente al periodo ${period_id}, con las fechas y requisitos establecidos para cada fase del proceso. Le solicitamos revisar el documento y asegurarse de cumplir con los plazos indicados para garantizar una gestión eficiente.</p>
+          <p>Si tiene alguna consulta o requiere aclaraciones, no dude en ponerse en contacto.</p>
+          <p>Quedamos atentos a su confirmación.</p>
+          <p>Atentamente,<br>
+          ${emailConfig.instituteName}<br>
+          ${emailConfig.contactEmail}<br>
+        </body>
+      </html>
+    `;
 
-      const sendSmtpEmail = new brevo.SendSmtpEmail();
-      sendSmtpEmail.subject = `Cronograma de Entregas para el Periodo ${period_id}`;
-      sendSmtpEmail.to = [{ email: user.email }];
-      sendSmtpEmail.htmlContent = emailContent;
-      sendSmtpEmail.sender = {
-        name: "Servicio de notificaciones UNCP",
-        email: "leonardoaraujo.oct@gmail.com",
-      };
-      sendSmtpEmail.attachment = [
-        {
-          content: pdfBase64,
-          name: path.basename(pdfPath),
-          type: "application/pdf",
-          disposition: "attachment",
-        },
-      ];
+    const sendSmtpEmail = new brevo.SendSmtpEmail();
+    sendSmtpEmail.subject = `Cronograma de Entregas para el Periodo ${period_id}`;
+    sendSmtpEmail.to = [{ email: user.email }];
+    sendSmtpEmail.htmlContent = emailContent;
+    sendSmtpEmail.sender = {
+      name: emailConfig.senderName,
+      email: emailConfig.senderEmail,
+    };
+    sendSmtpEmail.attachment = [
+      {
+        content: pdfBase64,
+        name: path.basename(pdfPath),
+        type: "application/pdf",
+        disposition: "attachment",
+      },
+    ];
 
-      const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
-      console.log(`Correo enviado a ${user.email}:`, result);
-    }
+    const result = await apiInstance.sendTransacEmail(sendSmtpEmail);
+    console.log(`Correo enviado a ${user.email}:`, result);
+  }
   } catch (error) {
     console.error(error);
   }

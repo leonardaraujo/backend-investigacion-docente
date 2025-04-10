@@ -2,34 +2,74 @@ import puppeteer from "puppeteer";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+
+// Cargar variables de entorno
+dotenv.config();
 
 export const DELIVERY_TYPES = [
-  { id: 1, tipo: "AVANCE" },
-  { id: 2, tipo: "ENTREGA FINAL" },
+	{ id: 1, tipo: "AVANCE" },
+	{ id: 2, tipo: "ENTREGA FINAL" },
 ];
 
 // Obtener la ruta del directorio actual
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+
+// Determinar qué universidad está activa
+const activeUniversity = process.env.UNIVERSITY || "GPT"; // Por defecto es GPT si no se especifica
+
+
+// Seleccionar la imagen del logo según la universidad activa
+const getLogoPath = () => {
+	if (activeUniversity === "UNCP") {
+		return path.resolve(__dirname, "uncp_logo.png");
+	} else {
+		return path.resolve(__dirname, "gpt_logo.png");
+	}
+};
+
+// Obtener el nombre del instituto según la universidad activa
+const getInstituteName = () => {
+	if (activeUniversity === "UNCP") {
+		return (
+			process.env.UNCP_INSTITUTE_NAME ||
+			"Oficina del Instituto Especializado de Investigación"
+		);
+	} else {
+		return (
+			process.env.GPT_INSTITUTE_NAME || "Oficina del Instituto de Investigación"
+		);
+	}
+};
+
 // Función para convertir una imagen a base64
 const imageToBase64 = (filePath) => {
-  const bitmap = fs.readFileSync(filePath);
-  return Buffer.from(bitmap).toString("base64");
+	try {
+		const bitmap = fs.readFileSync(filePath);
+		return Buffer.from(bitmap).toString("base64");
+	} catch (error) {
+		console.error(`Error al leer la imagen ${filePath}:`, error);
+		// Devolver una imagen de respaldo o una cadena vacía
+		return "";
+	}
 };
 
 // Ruta de la imagen del logo
-const logoPath = path.resolve(__dirname, "uncp_logo.png");
+const logoPath = getLogoPath();
 const logoBase64 = imageToBase64(logoPath);
 
 // Función para obtener el nombre del tipo de entrega
 const getDeliveryTypeName = (id) => {
-  const deliveryType = DELIVERY_TYPES.find((type) => type.id === id);
-  return deliveryType ? deliveryType.tipo : "Desconocido";
+	const deliveryType = DELIVERY_TYPES.find((type) => type.id === id);
+	return deliveryType ? deliveryType.tipo : "Desconocido";
 };
 
 // Convertir datos JSON a HTML
 const generateHTML = (data) => {
+  const instituteName = getInstituteName();
+  
   let htmlContent = `
   <!DOCTYPE html>
   <html lang="es">
@@ -44,11 +84,13 @@ const generateHTML = (data) => {
           th, td { border: 1px solid black; padding: 10px; text-align: center; }
           th { background-color: #e0e0e0; }
           .logo { position: absolute; top: 20px; left: 20px; width:50px; }
+          .institute-name { font-size: 16px; margin-bottom: 20px; }
       </style>
   </head>
   <body>
       <img src="data:image/png;base64,${logoBase64}" class="logo" alt="Logo">
       <h1>Cronograma de Actividades</h1>
+      <div class="institute-name">${instituteName}</div>
       <table>
           <tr>
               <th rowspan="2">Nombre del proyecto</th>
@@ -62,91 +104,91 @@ const generateHTML = (data) => {
               <th>Fecha de fin</th>
           </tr>`;
 
-  data.forEach((project) => {
-    const projectRowSpan = project.user_research_projects.reduce(
-      (acc, userProject) => acc + userProject.project_deliveries.length,
-      0
-    );
-    let firstRow = true;
+	data.forEach((project) => {
+		const projectRowSpan = project.user_research_projects.reduce(
+			(acc, userProject) => acc + userProject.project_deliveries.length,
+			0,
+		);
+		let firstRow = true;
 
-    project.user_research_projects.forEach((userProject) => {
-      // Ordenar las entregas por delivery_number
-      const sortedDeliveries = userProject.project_deliveries.sort(
-        (a, b) => a.delivery_number - b.delivery_number
-      );
+		project.user_research_projects.forEach((userProject) => {
+			// Ordenar las entregas por delivery_number
+			const sortedDeliveries = userProject.project_deliveries.sort(
+				(a, b) => a.delivery_number - b.delivery_number,
+			);
 
-      sortedDeliveries.forEach((delivery) => {
-        htmlContent += `
+			sortedDeliveries.forEach((delivery) => {
+				htmlContent += `
           <tr>
               ${
-                firstRow
-                  ? `<td rowspan="${projectRowSpan}">${
-                      project.name +
-                      "\n" +
-                      userProject.user.email
-                    }</td>`
-                  : ""
-              }
+								firstRow
+									? `<td rowspan="${projectRowSpan}">${
+											project.name + "\n" + userProject.user.email
+										}</td>`
+									: ""
+							}
               ${
-                firstRow
-                  ? `<td rowspan="${projectRowSpan}">${new Date(
-                      project.start_date
-                    ).toLocaleDateString()}</td>`
-                  : ""
-              }
+								firstRow
+									? `<td rowspan="${projectRowSpan}">${new Date(
+											project.start_date,
+										).toLocaleDateString()}</td>`
+									: ""
+							}
               ${
-                firstRow
-                  ? `<td rowspan="${projectRowSpan}">${new Date(
-                      project.finish_date
-                    ).toLocaleDateString()}</td>`
-                  : ""
-              }
+								firstRow
+									? `<td rowspan="${projectRowSpan}">${new Date(
+											project.finish_date,
+										).toLocaleDateString()}</td>`
+									: ""
+							}
               <td>${getDeliveryTypeName(delivery.delivery_type_id)}${
-          delivery.delivery_type_id == 1 ? ` ${delivery.delivery_number}` : ``
-        }</td>
+								delivery.delivery_type_id == 1
+									? ` ${delivery.delivery_number}`
+									: ``
+							}</td>
               <td>${new Date(delivery.start_date).toLocaleDateString()}</td>
               <td>${new Date(delivery.finish_date).toLocaleDateString()}</td>
           </tr>`;
-        firstRow = false;
-      });
-    });
-  });
+				firstRow = false;
+			});
+		});
+	});
 
-  htmlContent += `
+	htmlContent += `
       </table>
   </body>
   </html>`;
-  return htmlContent;
+	return htmlContent;
 };
 
 // Función para generar el PDF y guardarlo en una carpeta
 export async function generatePDF(data, filename) {
-  const htmlContent = generateHTML(data);
-  const browser = await puppeteer.launch();
-  const page = await browser.newPage();
+	const htmlContent = generateHTML(data);
+	const browser = await puppeteer.launch();
+	const page = await browser.newPage();
 
-  // Cargar el contenido HTML
-  await page.setContent(htmlContent, { waitUntil: "load" });
+	// Cargar el contenido HTML
+	await page.setContent(htmlContent, { waitUntil: "load" });
 
-  // Generar el PDF en formato horizontal
-  const pdfBuffer = await page.pdf({
-    format: "A4",
-    landscape: true, // Formato horizontal
-    printBackground: true,
-    margin: { top: "15mm", right: "10mm", bottom: "15mm", left: "10mm" },
-  });
+	// Generar el PDF en formato horizontal
+	const pdfBuffer = await page.pdf({
+		format: "A4",
+		landscape: true, // Formato horizontal
+		printBackground: true,
+		margin: { top: "15mm", right: "10mm", bottom: "15mm", left: "10mm" },
+	});
 
-  await browser.close();
+	await browser.close();
 
-  // Crear la carpeta si no existe
-  const uploadDir = path.resolve(__dirname, "../uploads/schedules");
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  }
+	// Crear la carpeta si no existe
+	const uploadDir = path.resolve(__dirname, "../uploads/schedules");
+	if (!fs.existsSync(uploadDir)) {
+		fs.mkdirSync(uploadDir, { recursive: true });
+	}
 
-  // Guardar el PDF en la carpeta
-  const pdfPath = path.join(uploadDir, filename);
-  fs.writeFileSync(pdfPath, pdfBuffer);
+	// Guardar el PDF en la carpeta
+	const pdfPath = path.join(uploadDir, filename);
+	fs.writeFileSync(pdfPath, pdfBuffer);
 
-  return pdfPath;
+	return pdfPath;
 }

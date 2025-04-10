@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "dev:uncp": "cross-env UNIVERSITY=UNCP node index.js",
+    "dev:gpt": "cross-env UNIVERSITY=GPT node index.js",
     "dev": "nodemon index.js"
   },
   "keywords": [],
@@ -27,6 +29,7 @@
     "sequelize": "^6.37.5"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "nodemon": "^3.1.9"
   }
 }
